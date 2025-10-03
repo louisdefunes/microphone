@@ -1,0 +1,1 @@
+ffplay udp://0.0.0.0:2500 -f s16le -ar 44100 -af "volume=10.0"   
