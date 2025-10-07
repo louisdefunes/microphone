@@ -17,13 +17,7 @@
 #include "task_structs.h"
 
 // vTaskDelay(pdMS_TO_TICKS(500));
-int ret_hand;
-#define handle_error(msg) \
-        do {perror(msg); ret_hand = 10;} while(0)
-
-
 static size_t bytes_read;
-SemaphoreHandle_t udp_sem;
   
 //i2s config
 void i2s_init()
@@ -35,7 +29,9 @@ void i2s_init()
         .channel_format = I2S_CHANNEL_FMT_ONLY_LEFT,
         .communication_format = I2S_COMM_FORMAT_STAND_I2S,
         .intr_alloc_flags = 0,
-        .dma_desc_num = 64, //wczesniej 8 POMOGLA ZMIANA NA 64 NAGLE ZACZELO DZIALAC Z TYM WERSJA Z DWOMA TASKAMI
+        .dma_desc_num = 64, /*wczesniej 8; zmiana na 64 sprawiła, że wersja z dwoma taskami działa
+                            zarówno pobieranie próbek i2s, jak i przesyłanie danych w UART 
+                            korzysta z buforów Rx DMA więc zbyt mała ich liczba powoduje konflikty */ 
         .dma_frame_num = 16,
     };
 
@@ -51,7 +47,7 @@ void i2s_init()
     i2s_set_pin(I2S_PORT, &pin_config);
 }
 
-void slider_task(void *pvParameters)
+void slider_task()
 {
     int received_size;
     int bytes_read_i2s = 0;
@@ -100,35 +96,17 @@ void button_task() {
     }
 }
 
-void run_uart_task(SemaphoreHandle_t semaphore)
-{
-    TaskHandle_t uart_task = NULL;
-
-    slider_task_args_t *slider = malloc(sizeof(slider_task_args_t));
-
-    slider->sem = semaphore;
-
-    xTaskCreate(slider_task, "slider", 4096, slider, tskIDLE_PRIORITY, &uart_task);
-}
-
-void run_udp_task(SemaphoreHandle_t semaphore)
+void run_udp_task()
 {
 
-    TaskHandle_t udp_task = NULL;
+    // TaskHandle_t udp_task = NULL;
     
     udp_send_config_t *udp_config = malloc(sizeof(udp_send_config_t));
 
-    udp_config->udp_size_semaphore = semaphore;
-    // udp_config->changed_size = udp_packet_size;
-    // udp_config->out_buff = udp_out_buff;
     udp_config->bytes_read = &bytes_read;
 
-    xTaskCreate(udp_transfer, "send_udp", 8192, udp_config, tskIDLE_PRIORITY, &udp_task);
+    xTaskCreate(udp_transfer, "send_udp", 8192, udp_config, tskIDLE_PRIORITY, NULL);
 
-}
-
-void run_button_task() {
-    xTaskCreate(button_task, "button", 2048, NULL, 5, NULL);
 }
 
 void app_main(void)
@@ -139,7 +117,7 @@ void app_main(void)
     ESP_ERROR_CHECK(nvs_open("storage", NVS_READWRITE, &handle_nvs));
     
     //Task do przycisku resetujacego NVS
-    run_button_task();
+    xTaskCreate(button_task, "button", 2048, NULL, 5, NULL);
 
     printf("HelloWorld "__DATE__", "__TIME__"\n");  
     
@@ -153,7 +131,7 @@ void app_main(void)
     uart_init();
     
     //Task do zmiany rozmiaru pakietu UDP
-    run_uart_task(udp_sem);    
+    xTaskCreate(slider_task, "slider", 4096, NULL, tskIDLE_PRIORITY, NULL);
     //Task do wysyłania pakietów UDP
-    run_udp_task(udp_sem);
+    run_udp_task();
 }

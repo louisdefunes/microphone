@@ -12,6 +12,7 @@
 #define PACKET_SIZE 1024 // for UDP
 #define MAX_SIZE 32000 // 65536
 #define SERVER_IP_ADDR "192.168.8.101" //"192.168.8.105" //"192.168.0.124"
+#define SERVER_HOSTNAME "serveriuseforesp.ddns.net"
 
 // Konfiguracja WiFi STA
 #define WIFI_SSID "wifi" 

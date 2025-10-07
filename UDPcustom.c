@@ -7,8 +7,6 @@
 #include <driver/i2s_std.h>
 #include <freertos/queue.h>
 #include <esp_netif.h>
-#include <unistd.h>
-#include <netdb.h>
 
 #include "Config.h"
 #include "task_structs.h"
@@ -22,7 +20,7 @@ int ret;
    portu zdefiniowanego w Config.h oraz otrzymanego adresu po połączeniu do WiFi */
 int initialize_udp(struct sockaddr_in *client_address,
                    struct sockaddr_in *server_address,
-                   const char *hostname)
+                   char *ip)
     {
     /*ifkey = interface key -> przeszukuje liste stworzonych obiektów aby znaleźć ten wskazany czyli WIFI_STA_DEF,
     po to żeby uzyskać informacje na temat interfejsu sieciowego i rzutować je na strukture ip_info,
@@ -48,41 +46,16 @@ int initialize_udp(struct sockaddr_in *client_address,
     client_address->sin_port=htons(UDP_PORT);
     client_address->sin_addr.s_addr=ip_info.ip.addr;
 
+    server_address->sin_family=AF_INET;
+    server_address->sin_port=htons(UDP_PORT);
+    server_address->sin_addr.s_addr=inet_addr(SERVER_IP_ADDR);
+
     // socket(deskryptor do komunikacji, znajdujący sie po stronie nadawcy, narazie bez adresu ani portu)
     int sock_serv = socket(AF_INET, SOCK_DGRAM, 0);
     if (sock_serv == -1) handle_error("server socket:");
 
     //przypisanie adresu i portu do socketu
     if (bind(sock_serv, (struct sockaddr *) client_address, sizeof(struct sockaddr_in))==-1 ) handle_error("bind: ");
-
-    //rozwiązanie adresu z hostname DNS
-    struct addrinfo hints;
-    struct addrinfo *resolved;
-    char port_num[6];
-    snprintf(port_num, sizeof(port_num), "%d", UDP_PORT);
-
-    memset(&hints, 0, sizeof(hints));
-    hints.ai_family = AF_INET;
-    hints.ai_socktype = SOCK_DGRAM;
-
-    int gai_error = getaddrinfo(hostname, port_num, &hints, &resolved);
-    if (gai_error != 0) {
-        printf("getaddrinfo(%s): %d\n", hostname, gai_error);
-        close(sock_serv);
-        
-        return -1;
-    }
-
-    if (resolved->ai_family == AF_INET && resolved->ai_addrlen >= sizeof(struct sockaddr_in)) {
-        memcpy(server_address, resolved->ai_addr, sizeof(struct sockaddr_in));
-    } else {
-        printf("niepoprawna dlugosc otrzymanego adresu lub adres nie jest IPv4\n");
-        freeaddrinfo(resolved);
-        close(sock_serv);
-        return -1;
-    }
-
-    freeaddrinfo(resolved);
 
     return sock_serv;
 }
@@ -107,9 +80,7 @@ void udp_transfer(void *pvParameters)
     memset(&server_address, 0, sizeof(server_address));
     memset(&client_address, 0, sizeof(client_address));
 
-    int socket = initialize_udp(&client_address, &server_address, SERVER_HOSTNAME);
-
-    printf("Rozpoczynam wysyłanie na adres %s:%d\n", inet_ntoa(server_address.sin_addr), ntohs(server_address.sin_port));
+    int socket = initialize_udp(&client_address, &server_address, SERVER_IP_ADDR);
 
     /* Zeruj bufor -> odczytaj z bufora Rx w DMA próbki zapisane przez mikrofon -> wyślij poprzez UDP*/
     while (1) 

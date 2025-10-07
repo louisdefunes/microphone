@@ -19,3 +19,5 @@
 #define QR_FLAG (1 << 7)
 #define QD_TYPE_A (0x0001)
 #define ANS_TTL_SEC (300)
+
+typedef struct __attribute__ (__packed)

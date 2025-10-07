@@ -15,7 +15,6 @@
 #include <driver/gpio.h>
 #include "HTTP.h"
 
-
 #define WIFI_CONNECTED_BIT BIT0
 #define WIFI_FAIL_BIT BIT1
 #define HTTP_SERVER_START BIT2
@@ -34,7 +33,9 @@ void led_blink(int led, int level)
     gpio_set_level(led, level);
 }
 
-//Event Group służy do czekania na określone 'events' z danej grupy; tutaj: 's_wifi_event_group'. 
+/*Event Group służy do czekania na określone 'events' i definiowania reakcji na nie z danej grupy; tutaj: 's_wifi_event_group'. 
+  xEventGroupSetBits służy do tego, żeby samodzielnie zdefiniować zdarzenie i obsłużyć je, tak jak np ustawiono bit HTTP_SERVER_START
+  który, jeżeli ustawiony, rozpoczyna funkcje run_http */
 static void wifi_event_handler(void *ev_handler_arg, esp_event_base_t event_base, int32_t event_id, void *event_data)
 {
     if (event_base == WIFI_EVENT) {
@@ -67,7 +68,7 @@ static void wifi_event_handler(void *ev_handler_arg, esp_event_base_t event_base
         switch (event_id) {
             case IP_EVENT_STA_GOT_IP:
                 xEventGroupSetBits(s_wifi_event_group, WIFI_CONNECTED_BIT);
-                printf("Connected to SSID: %s and got IP\n", ssid);
+                printf("Succesfully connected to SSID and got IP\n");
                 led_blink(LEDGPIO, 1);
                 break;
             default:
@@ -133,10 +134,12 @@ esp_netif_t *wifi_init_sta(char *ssid, char *password) {
 }
 
 esp_netif_t *run_ap() {
+    /* rozpoczynamy działanie w trybie AP, czekamy na połączenie klienta, co rozpoczyna rozgłaszanie formularza http */
     esp_wifi_set_mode(WIFI_MODE_AP);
     esp_netif_t *ap = wifi_init_ap();
     esp_wifi_start();
     
+    //ustawienie flagi 114 podczas rozdawania adresu, nie daje zamierzonego efektu
     dhcp_set_captiveportal_url();
 
     EventBits_t bits = xEventGroupWaitBits(s_wifi_event_group, 
@@ -157,13 +160,15 @@ int run_APSTA(){
     //Konfiguracja handlera, loop_event_handlera, konfiguracji połączenia, podjęcie próby podłączenia
     s_wifi_event_group = xEventGroupCreate();
     esp_netif_init();//inicjalizacja stosu TCP/IP poprzez LwIP, zmienia zmienną s_netif_initialized na true/network interface initialization
-    esp_event_loop_create_default();//loop responsible for event handling
+    esp_event_loop_create_default();
 
+    //obsługa zdarzeń z kategorii WIFI_EVENT przez nasz handler
     esp_event_handler_register(WIFI_EVENT,
                                 ESP_EVENT_ANY_ID,
                                 wifi_event_handler,
                                 NULL);
 
+    //obsługa zdarzeń z kategorii IP_EVENT...
     esp_event_handler_register(IP_EVENT,
                                 IP_EVENT_STA_GOT_IP, 
                                 wifi_event_handler, 
@@ -179,11 +184,12 @@ int run_APSTA(){
         ran_ap = run_ap();
     }
 
+    //dopóki task http nie ustawił zmiennej provisioned, nie wykonuj dalej
     while (!provisioned) vTaskDelay(pdMS_TO_TICKS(1000));
 
     printf("koniec AP\n");
     
-    // Zatrzymanie AP jezeli ran_ap nie jest NULL
+    // Jeżeli tryb AP byl wczesniej włączony (ran_ap != NULL), to wyłącz i przełącz na STA 
     if (ran_ap != NULL) {
         esp_wifi_stop();
         vTaskDelay(pdMS_TO_TICKS(500));
@@ -194,36 +200,40 @@ int run_APSTA(){
         esp_netif_destroy(ran_ap);
         vTaskDelay(pdMS_TO_TICKS(100));
 
-        printf("SSID: %s\n", ssid);
-        printf("PASSWORD: %s\n", passphrase);
+        // printf("SSID: %s\n", ssid);
+        // printf("PASSWORD: %s\n", passphrase);
 
-        for (int i = 0; i < sizeof(ssid); i++) {
-            printf("%c", ssid[i]);
-        }
-        printf("\n");
-        for (int i = 0; i < sizeof(passphrase); i++) {
-            printf("%c", passphrase[i]);
-        }
-        printf("\n");
+        // for (int i = 0; i < sizeof(ssid); i++) {
+        //     printf("%c", ssid[i]);
+        // }
+        // printf("\n");
+        // for (int i = 0; i < sizeof(passphrase); i++) {
+        //     printf("%c", passphrase[i]);
+        // }
+        // printf("\n");
         
-        //z jakiegos powodu ustawienie WIFI_MODE_STA musi byc przed uzyskaniem handlera esp_netif_t *sta, bo inaczej sie wykrzaczy
+        // Ustawienie WIFI_MODE_STA musi byc przed uzyskaniem handlera esp_netif_t *sta, bo inaczej sie wykrzaczy
         esp_wifi_set_mode(WIFI_MODE_STA);
         vTaskDelay(pdMS_TO_TICKS(100));
         esp_netif_t *sta = wifi_init_sta(ssid, passphrase);
 
     } else {
+        //Jeżeli AP nie był aktywowany, zacznij od STA
         esp_wifi_set_mode(WIFI_MODE_STA);
 
         size_t required_size = 0;
 
+        //Pobierz zmienne wartości SSID i PASSPHRASE z pamięci NVS
         nvs_get_str(handle_nvs, "ssid", NULL, &required_size);
         char *nvs_ssid = malloc(required_size);        
         nvs_get_str(handle_nvs, "ssid", nvs_ssid, &required_size);
 
-        for (int i = 0; i < required_size; i++) {
-            printf("%c", nvs_ssid[i]);
-        }
-        printf("\n");
+        // for (int i = 0; i < required_size; i++) {
+        //     printf("%c", nvs_ssid[i]);
+        // }
+        // printf("\n");
+
+        snprintf(ssid, required_size, "%s", nvs_ssid);
 
         required_size = 0;
 
@@ -231,19 +241,13 @@ int run_APSTA(){
         char *nvs_pass = malloc(required_size);
         nvs_get_str(handle_nvs, "password", nvs_pass, &required_size);
         
-        // copy into globals so event handler sees them
-        strncpy(ssid, nvs_ssid, sizeof(ssid) - 1);
-        ssid[sizeof(ssid)-1] = '\0';
-        strncpy(passphrase, nvs_pass, sizeof(passphrase) - 1);
-        passphrase[sizeof(passphrase)-1] = '\0';
+        // printf("SSID: %s\n", nvs_ssid);
+        // printf("PASSWORD: %s\n", nvs_pass);
 
-        printf("SSID: %s\n", nvs_ssid);
-        printf("PASSWORD: %s\n", nvs_pass);
-
-        for (int i = 0; i < required_size; i++) {
-            printf("%c", nvs_pass[i]);
-        }
-        printf("\n");
+        // for (int i = 0; i < required_size; i++) {
+        //     printf("%c", nvs_pass[i]);
+        // }
+        // printf("\n");
 
         esp_netif_t *sta = wifi_init_sta(nvs_ssid, nvs_pass);
 
@@ -253,7 +257,6 @@ int run_APSTA(){
     
     //Przełączenie w tryb STA    
     esp_wifi_start();
-
 
     //Wyświetlenie adresu IP
      EventBits_t bits = xEventGroupWaitBits(s_wifi_event_group, 
