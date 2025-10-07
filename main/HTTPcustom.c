@@ -67,7 +67,7 @@ int parse_body(char *str, int content_len) {
                 pass_start += strlen("password=");
 
                 ssize_t pass_len = content_len;
-                printf("\nContent nigga len is equal to %d\n", content_len);
+                printf("\nContent len is equal to %d\n", content_len);
                 if (pass_len >= sizeof(passphrase)) pass_len = sizeof(passphrase) - 1;
                 char temp[64];
                 strncpy(temp, pass_start, pass_len);
@@ -201,7 +201,7 @@ void *handle_client(void *arg) {
                 "      <label for=\"ssid\">Nazwa sieci (SSID)</label>\n"
                 "      <input id=\"ssid\" name=\"ssid\" class=\"field\" placeholder=\"np. Dom_2.4G\" required />\n"
                 "      <label for=\"password\">Hasło Wi‑Fi</label>\n"
-                "      <input id=\"password\" name=\"password\" class=\"field\" type=\"password\" placeholder=\"haslo podaj cieciu\" required />\n"
+                "      <input id=\"password\" name=\"password\" class=\"field\" type=\"password\" placeholder=\"haslo podaj \" required />\n"
                 "      <div class=\"hint\">WPA/WPA2 zwykle wymaga min. 8 znaków.</div>\n"
                 "      <div class=\"actions\">\n"
                 "        <button type=\"submit\" class=\"btn\">Zapisz i połącz</button>\n"
