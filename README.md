@@ -56,17 +56,17 @@ through a TP4056 charging module.
   -----------------------------------------------------------------------
   INMP441 Pin             ESP32 Pin               Function
   ----------------------- ----------------------- -----------------------
-  L/R                     GND                     Channel selection
+  L/R       ---->              GND         ---->            Channel selection
 
-  WS                      GPIO33                  Word Select (LRCLK)
+  WS        ---->              GPIO33      ---->            Word Select (LRCLK)
 
-  SCK                     GPIO14                  Bit Clock (BCLK)
+  SCK       ---->              GPIO14      ---->            Bit Clock (BCLK)
 
-  SD                      GPIO25                  Serial Data input
+  SD        ---->              GPIO25      ---->            Serial Data input
 
-  VDD                     3V3                     Power supply
+  VDD       ---->              3V3         ---->            Power supply
 
-  GND                     GND                     Ground
+  GND       ---->              GND         ---->            Ground
   -----------------------------------------------------------------------
 
 Additional connections:\
